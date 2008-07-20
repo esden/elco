@@ -140,6 +140,12 @@
   (emit "    sal $~s, %al" +bool-bit+)
   (emit "    or $~s, %al" +bool-f+))
 
+(defprim (elco:fxlognot arg)
+  (emit-expr arg)
+  (emit "    shrl $~s, %eax" +fxshift+)
+  (emit "    notl %eax")
+  (emit "    shll $~s, %eax" +fxshift+))
+
 (defprim (elco:nilp arg)
   (emit-expr arg)
   (emit "    cmp $~s, %al" +nil+)
