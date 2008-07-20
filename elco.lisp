@@ -2,6 +2,8 @@
 ; Basic Emission stuff
 ;%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+(defvar *compile-directory* *default-pathname-defaults*)
+
 (defvar *compile-port* nil)
 
 (defun open-compile-port (file)
@@ -198,7 +200,7 @@
   (emit-function-footer))
 
 (defun compile-program (expr)
-  (open-compile-port "elco.s")
+  (open-compile-port (merge-pathnames *compile-directory* #P"elco.s"))
   (emit-program expr)
   (close-compile-port))
 
@@ -208,19 +210,19 @@
 
 (defun build ()
   (with-output-to-string (gcc-output-stream)
-                             (run-program "/usr/bin/gcc" 
-                                          '("-Wall"
-                                            "/Users/esdentem/projects/lisp/learning/elco/step3/elco-driver.c" 
-                                            "/Users/esdentem/projects/lisp/learning/elco/step3/elco.s" 
-                                            "-o" "/Users/esdentem/projects/lisp/learning/elco/step3/elco") 
-                                          :output gcc-output-stream
-                                          :error :output)))
+    (run-program "/usr/bin/gcc" 
+                 `("-Wall"
+                   ,(namestring (merge-pathnames *compile-directory* #P"elco-driver.c")) 
+                   ,(namestring (merge-pathnames *compile-directory* #P"elco.s")) 
+                   "-o" ,(namestring (merge-pathnames *compile-directory* #P"elco"))) 
+                 :output gcc-output-stream
+                 :error :output)))
 
 (defun run ()
   (with-output-to-string (elco-output-stream)
-                              (run-program "/Users/esdentem/projects/lisp/learning/elco/step3/elco"
-                                           nil
-                                           :output elco-output-stream)))
+    (run-program (namestring (merge-pathnames *compile-directory* #P"elco"))
+                 nil
+                 :output elco-output-stream)))
 
 (defun execute-program (expr)
   (compile-program expr)
