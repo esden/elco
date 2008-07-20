@@ -1,0 +1,64 @@
+ELCO stands for Esdens Lisp COmpiler or Embedded Lisp COmpiler
+
+Some History:
+=============
+The project started while trying out the Steps provided in two papers 
+by Abdulaziz Ghuloum called "Compilers: Backend to Frontend and Back 
+to Front Again" and "An Incremental Approach to Compiler Construction"
+
+The tests are mostly translated from sheme examples provided on 
+Abdulazizs site http://www.cs.indiana.edu/~aghuloum. 
+
+The first implementation was in CommonLisp and can be found in the 
+cl-elco git branch. There are also tags "step1" through "step9" 
+corresponding to the steps in "Compilers: Back to Frontend and Back to 
+Front Again"
+
+The syntax of the ELCO was first a strange mix of CL and scheme. 
+
+The current goal is to make ELCO compile arc by Paul Graham with changes
+that are nessesary to make the language easy to use on OS free embedded 
+systems.
+
+Furthermore see project homepage on http://elco.sourceforge.net.
+
+Requirements:
+=============
+
+Currently you need git to check out elco.
+
+To run elco you need mzscheme (http://plt-scheme.org/software/mzscheme/)
+
+Checking out:
+=============
+
+>$ git clone git://github.com/esden/elco.git
+>$ cd elco
+>$ git submodule init
+>$ git submodule update
+
+(NOTE: the submodule steps are needed to get the sheme arc implementation
+to bootstrap the elco compiler)
+
+Running the Compiler:
+=====================
+
+Currently it is pretty dificult to run the compiler.
+
+Load all the arc files from elco directory. Then you can run the 
+(execute-program) function. Some more convinient script will be added 
+in the future.
+
+Running Tests:
+==============
+
+Go to the toplevel elco directory and run:
+>$ utils/run-tests.sh
+
+(NOTE: do not forget to run the submodule steps above otherwise you will
+not have an arc to run elco on ^^)
+
+Have fun!
+
+Cheers 
+    Piotr Esden-Tempski
