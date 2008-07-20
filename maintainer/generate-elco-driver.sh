@@ -28,6 +28,10 @@
 # NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS 
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+# This script takes the elco driver written in c and embeds it in lisp
+# this way you don't need the c file lying somewhere around while in 
+# the lisp word. 
+
 ELCO_DRIVER_FILE="elco/driver.lisp"
 
 echo '(in-package #:elco)' > $ELCO_DRIVER_FILE
