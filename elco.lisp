@@ -90,6 +90,7 @@
 ;; Primcall definitions
 ;;%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+;;; utilities
 (defvar *symbol-list* (make-hash-table))
 
 (defmacro defprim ((prim &rest args) &body body)
@@ -106,6 +107,7 @@
        ;(format t "symbol-list hash: ~s~%" (gethash (symbol-name ',prim) *symbol-list*))
        (setf (gethash ',prim *symbol-list*) prim-hash))))
 
+;;; unary primitives
 (defprim (elco:fx1+ arg)
   (emit-expr arg)
   (emit "    addl $~s, %eax" (immediate-rep 1)))
@@ -208,12 +210,50 @@
     (apply (primitive-emitter prim) args)))
 
 ;%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+; Conditional (if)
+;%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+(defvar *unique-label*
+  (let ((count 0))
+    (lambda ()
+      (let ((L (format nil "L_~s" count)))
+        (incf count)
+        L))))
+
+(defun ifp (expr)
+  (or (and (equal (symbol-name (car expr)) "IF")
+           (> (length expr) 2)
+           (< (length expr) 5))))
+
+(defun if-test (expr)
+  (cadr expr))
+
+(defun if-conseq (expr)
+  (caddr expr))
+
+(defun if-altern (expr)
+  (cadddr expr))
+
+(defun emit-if (expr)
+  (let ((alt-label (funcall *unique-label*))
+        (end-label (funcall *unique-label*)))
+    (emit-expr (if-test expr))
+    (emit "    cmp $~s, %al" +bool-f+)
+    (emit "    je ~a" alt-label)
+    (emit-expr (if-conseq expr))
+    (emit "    jmp ~a" end-label)
+    (emit "~a:" alt-label)
+    (emit-expr (if-altern expr))
+    (emit "~a:" end-label)))
+
+;%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 ; Highlevel emission
 ;%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 (defun emit-expr (expr)
   (cond
     ((immediatep expr) (emit-immediate expr))
+    ((ifp expr) (emit-if expr))
     ((primcallp expr) (emit-primcall expr))
     (t (error "Supplied argument not immediate nor primcall! ~a" expr))))
 

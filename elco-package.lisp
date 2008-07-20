@@ -5,6 +5,11 @@
    :compile-program
    :build
    :execute
+   ; immediates
+   :T
+   :F
+   :nil
+   ; unary primitives
    :fx1+
    :fx1-
    :char-fx
@@ -15,6 +20,5 @@
    :boolp
    :charp
    :not
-   :T
-   :F
-   :nil))
+   ; conditionals
+   :if))
