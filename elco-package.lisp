@@ -16,9 +16,21 @@
    :fx-char
    :fixnump
    :fxzerop
+   :fxlognot
    :nilp
    :boolp
    :charp
    :not
    ; conditionals
-   :if))
+   :if
+   ; binary primitives
+   :fx+
+   :fx-
+   :fx*
+   :fxlogand
+   :fxlogor
+   :fx=
+   :fx<
+   :fx<=
+   :fx>
+   :fx>=))
