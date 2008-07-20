@@ -36,7 +36,7 @@
 #include <stdbool.h>
 #include <string.h>
 
-#include "elco-character-table.h"
+//#include "elco-character-table.h"
 
 /* define all lisp constants */
 #define FXMASK 0x03

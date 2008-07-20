@@ -28,9 +28,5 @@
 # NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS 
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-echo '(load "poker-elco.lisp")' | sbcl
-echo ""
-./build.sh
-echo "Pokertimer written for elco"
-echo "elco is a lisp compiler written in sbcl"
-./elco
+echo '(load "examples/pokertimer.lisp")' | sbcl
+./elco.bin

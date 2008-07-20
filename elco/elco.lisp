@@ -788,19 +788,19 @@
 (defun build ()
   (with-output-to-string (gcc-output-stream)
     (sb-ext:run-program "/usr/bin/gcc" 
-                 `("-O3"
-                   "-Wall"
-                   ,(namestring (merge-pathnames *compile-directory* #P"elco-driver.o")) 
-                   ,(namestring (merge-pathnames *compile-directory* #P"elco.s")) 
-                   "-o" ,(namestring (merge-pathnames *compile-directory* #P"elco"))) 
-                 :output gcc-output-stream
-                 :error :output)))
+                        `("-O3"
+                          "-Wall"
+                          ,(namestring *driver-object*) 
+                          ,(namestring (merge-pathnames *compile-directory* #P"elco.s")) 
+                          "-o" ,(namestring (merge-pathnames *compile-directory* #P"elco.bin"))) 
+                        :output gcc-output-stream
+                        :error :output)))
 
 (defun execute ()
   (with-output-to-string (elco-output-stream)
-    (sb-ext:run-program (namestring (merge-pathnames *compile-directory* #P"elco"))
-                 nil
-                 :output elco-output-stream)))
+    (sb-ext:run-program (namestring (merge-pathnames *compile-directory* #P"elco.bin"))
+                        nil
+                        :output elco-output-stream)))
 
 (defun execute-program (expr)
   (compile-program expr)
@@ -808,3 +808,5 @@
         (elco-output-string (execute)))
     (format t "gcc: ~a~%" gcc-output-string)
     (format t "elco: ~a" elco-output-string)))
+
+

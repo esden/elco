@@ -7,9 +7,11 @@ It was tested on:
 * Debian Linux (32bit)   (works)
 * Ubuntu Linux (64bit)   (works)
 
-To compile and run Pokertimer simply execute:
-# ./run_pokertimer.sh
+To compile and run Pokertimer example:
+- Goto the toplevel elco directory
+- execute
+  # examples/run_pokertimer.sh
 
-If you have ideas or questions go to my page: http://www.esden.net
+If you have ideas or questions go to: http://elco.sourceforge.net
 
 Have fun! :)

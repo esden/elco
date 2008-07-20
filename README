@@ -11,26 +11,24 @@ Otherwise you can see in the tags directory of the svn tree all the
 steps from "Compilers: Backend to Frontend"
 
 The syntax of the ELCO language is not stable and will probably change
-before I consider it stable. Furthermore see the trac page on 
-http://www.esden.net/trac/elco for all the TODO's there are. There is 
-a lot of them. ;)
+before I consider it stable. Furthermore see project homepage on 
+http://elco.sourceforge.net.
 
-When you are using slime you should first change the working directory
-of slime repl to the directory of elco. To do this, go to the slime 
-repl and type ',' and then type 'cd' and provide the directory where 
-elco is located.
+You need asdf to run elco.
 
 Loading the compiler:
 
-(load "elco-package.lisp")
-(load "elco.lisp")
+(asdf:operate 'asdf:load-op 'elco)
 
 Loading test system:
 
-(load "elco-test-package.lisp")
-(load "elco-test.lisp")
+(asdf:operate 'asdf:load-op 'elco-test)
 
-Running all tests:
+Running all tests in the console:
+
+utils/run-tests.sh
+
+Running all tests in lisp:
 
 (elco-test:run-tests)
 
@@ -48,17 +46,6 @@ Compiling a program:
 Compiling and executing a program:
 
 (elco:execute-program '(elco:fx+ 1 2))
-
-Building a program already compiled on the console:
-
-./build.sh
-
-[NOTE: this generates from the elco.s, elco-driver.c and 
-       elco-character-table.h the resulting elco binary]
-
-Running a compiled and built program in the console:
-
-./elco
 
 The syntax of the ELCO langage can be seen in elco-package.lisp 
 export section. Full documentation is pending. But currently because 

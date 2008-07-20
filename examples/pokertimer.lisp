@@ -26,8 +26,8 @@
 ;;; NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS 
 ;;; SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-(load "elco-package.lisp")
-(load "elco.lisp")
+(require 'asdf)
+(asdf:operate 'asdf:load-op 'elco)
 
 (defvar *poker-timer*)
 (setf *poker-timer* 
@@ -128,3 +128,4 @@
           (foreign-call "write" 0 str 10))))
 
 (elco:compile-program *poker-timer*)
+(elco:build)
