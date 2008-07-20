@@ -435,12 +435,11 @@
 ; Conditional (if)
 ;%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-(defvar *unique-label*
-  (let ((count 0))
-    (lambda ()
-      (let ((L (format nil "L_~s" count)))
-        (incf count)
-        L))))
+(let ((count 0))
+  (defun unique-label ()
+    (let ((L (format nil "EL_~s" count)))
+      (incf count)
+      L)))
 
 (defun ifp (expr)
   (and (equal (symbol-name (car expr)) "IF")
@@ -457,8 +456,8 @@
   (cadddr expr))
 
 (defun emit-if (si env expr)
-  (let ((alt-label (funcall *unique-label*))
-        (end-label (funcall *unique-label*)))
+  (let ((alt-label (unique-label))
+        (end-label (unique-label)))
     (emit-expr si env (if-test expr))
     (emit "    cmp $~s, %al" +bool-f+)
     (emit "    je ~a" alt-label)
@@ -619,8 +618,8 @@
   )
 
 (defun emit-tail-if (si env expr)
-  (let ((alt-label (funcall *unique-label*))
-        (end-label (funcall *unique-label*)))
+  (let ((alt-label (unique-label))
+        (end-label (unique-label)))
     (emit-expr si env (if-test expr))
     (emit "    cmp $~s, %al" +bool-f+)
     (emit "    je ~a" alt-label)
