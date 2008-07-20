@@ -1,5 +1,5 @@
 .text
-.globl _scheme_entry
-_scheme_entry:
-movl $128, %eax
+.globl _elco_entry
+_elco_entry:
+movl $63, %eax
 ret
