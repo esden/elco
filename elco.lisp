@@ -412,7 +412,7 @@
     (emit-function-header label)
     (labels ((emit-lambda-closure (fmls si env)
                (if (not fmls) 
-                   (emit-expr si env (lambda-body expr))
+                   (emit-tail-expr si env (lambda-body expr))
                    (emit-lambda-closure (cdr fmls)
                       (next-stack-index si)
                       (extend-env (car fmls) si env)))))
@@ -462,6 +462,80 @@
     (emit-adjust-base (- (+ si +wordsize+)))))
 
 ;%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+; Tail calls
+;%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+(defun emit-tail-immediate (expr)
+  (emit-immediate expr)
+  ;(emit "    ret") ; why? o_O
+  )
+
+(defun emit-tail-var (env expr)
+  (emit-var env expr)
+  ;(emit "    ret") ; why? o_O
+  )
+
+(defun emit-tail-primcall (si env expr)
+  (emit-primcall si env expr)
+  ;(emit "    ret") ; why? o_O
+  )
+
+(defun emit-tail-if (si env expr)
+  (let ((alt-label (funcall *unique-label*))
+        (end-label (funcall *unique-label*)))
+    (emit-expr si env (if-test expr))
+    (emit "    cmp $~s, %al" +bool-f+)
+    (emit "    je ~a" alt-label)
+    (emit-tail-expr si env (if-conseq expr))
+    (emit "    jmp ~a" end-label)
+    (emit "~a:" alt-label)
+    (emit-tail-expr si env (if-altern expr))
+    (emit "~a:" end-label)))
+
+(defun emit-tail-let (si env expr)
+  (labels ((process-let (bindings si new-env)
+             (if bindings
+                 (let ((b (car bindings)))
+                   (emit-expr si (if (let*p expr) new-env env) (cadr b))
+                   (emit-stack-save si)
+                   (process-let 
+                    (cdr bindings)
+                    (next-stack-index si)
+                    (extend-env (car b) si new-env)))
+                 (emit-tail-expr si new-env (let-body expr)))))
+    (process-let (let-bindings expr) si env)))
+
+(defun emit-tail-call (env expr)
+  (emit "    jmp ~a /* tailcall */" (cdr (assoc expr env))))
+
+(defun emit-tail-app (si env expr)
+  (labels ((emit-arguments (si args)
+             (unless (not args)
+               (progn 
+                 (emit-expr si env (car args))
+                 (emit-stack-save si))
+               (emit-arguments (next-stack-index si) (cdr args))))
+           (emit-move-args (pos si count)
+             (unless (zerop count)
+               (progn
+                 (emit "    movl ~s(%esp), %ebx" si)
+                 (emit "    movl %ebx, ~s(%esp)" pos)
+                 (emit-move-args (next-stack-index pos) (next-stack-index si) (1- count))))))
+    (emit-arguments si (call-args expr))
+    (emit-move-args (- +wordsize+) si (length (call-args expr)))
+    (emit-tail-call env (call-target expr))))
+
+(defun emit-tail-expr (si env expr)
+  (cond
+    ((immediatep expr) (emit-tail-immediate expr))
+    ((appp env expr) (emit-tail-app si env expr))
+    ((varp env expr) (emit-tail-var env expr))
+    ((ifp expr) (emit-tail-if si env expr))
+    ((letp expr) (emit-tail-let si env expr))
+    ((primcallp expr) (emit-tail-primcall si env expr))
+    (t (error "Suppied tail argument not an elco expression! ~a" expr))))
+
+;%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 ; Highlevel emission
 ;%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -474,7 +548,7 @@
     ((ifp expr) (emit-if si env expr))
     ((letp expr) (emit-let si env expr))
     ((primcallp expr) (emit-primcall si env expr))
-    (t (error "Supplied argument not immediate, var, conditional, let nor primcall! ~a" expr))))
+    (t (error "Supplied argument not an elco expression! ~a" expr))))
 
 (defun emit-elco-entry (env expr)
   (emit-function-header "L_elco_entry")
