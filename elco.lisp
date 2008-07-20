@@ -124,7 +124,7 @@
 ;;%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 ;;; utilities
-(defvar *symbol-list* (make-hash-table))
+(defvar *symbol-list* (make-hash-table :test 'equal))
 
 (defmacro defprim ((prim si env &rest args) &body body)
   `(progn 
@@ -138,7 +138,7 @@
        ;(maphash #'(lambda (key value) (format t "prim-hash: ~s -> ~s~%" key value)) prim-hash)
        ;(maphash #'(lambda (key value) (format t "symbol-list: ~s -> ~s~%" key value)) *symbol-list*)
        ;(format t "symbol-list hash: ~s~%" (gethash (symbol-name ',prim) *symbol-list*))
-       (setf (gethash ',prim *symbol-list*) prim-hash))))
+       (setf (gethash (symbol-name ',prim) *symbol-list*) prim-hash))))
 
 (defun next-stack-index (si)
   (- si +wordsize+))
@@ -414,20 +414,20 @@
 
 (defun primitivep (prim)
   (and (symbolp prim) 
-       (gethash prim *symbol-list*) 
-       (gethash '*is-prim* (gethash prim *symbol-list*))))
+       (gethash (symbol-name prim) *symbol-list*) 
+       (gethash '*is-prim* (gethash (symbol-name prim) *symbol-list*))))
 
 (defun primcallp (expr)
   (and (consp expr) (primitivep (car expr))))
 
 (defun primitive-emitter (prim)
-  (or (gethash '*emitter* (gethash  prim *symbol-list*))
+  (or (gethash '*emitter* (gethash (symbol-name prim) *symbol-list*))
       (error "The prim ~a has no emitter!" prim)))
 
 (defun check-primcall-args (prim args)
-  (or (= (gethash '*arg-count* (gethash prim *symbol-list*)) (length args)) 
+  (or (= (gethash '*arg-count* (gethash (symbol-name prim) *symbol-list*)) (length args)) 
       (error "Wrong amount of parameters to primcall ~a, we expected ~a" 
-             prim (gethash '*arg-count* (gethash prim *symbol-list*)))))
+             prim (gethash '*arg-count* (gethash (symbol-name prim) *symbol-list*)))))
 
 (defun emit-primcall (si env expr)
   (let ((prim (car expr))
