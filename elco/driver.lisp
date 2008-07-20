@@ -415,4 +415,3 @@ int main(int argc, char **argv){
 			 ,(namestring driver-object)))
    (sb-ext:run-program "/bin/rm" `("-f" ,(namestring tmp)))
    driver-object))
-(defvar *driver-object* (create-driver-object))

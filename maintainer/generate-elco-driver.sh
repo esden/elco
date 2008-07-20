@@ -53,5 +53,3 @@ echo '" driver-stream))
 			 ,(namestring driver-object)))
    (sb-ext:run-program "/bin/rm" `("-f" ,(namestring tmp)))
    driver-object))' >> $ELCO_DRIVER_FILE
-
-echo '(defvar *driver-object* (create-driver-object))' >> $ELCO_DRIVER_FILE

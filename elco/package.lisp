@@ -33,6 +33,7 @@
    :compile-program
    :build
    :execute
+   :create-driver-object
    ; immediates
    :T
    :F

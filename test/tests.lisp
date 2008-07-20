@@ -30,17 +30,13 @@
 
 (defvar *all-tests* '())
 
-(defun run-test (input output)
-  (elco:compile-program input)
-  (let ((gcc-output (elco:build)))
-    (if (not (equal gcc-output ""))
-        (format t "gcc problem: ~s~%" gcc-output)
-        (let ((elco-output (elco:execute)))
-          (if (not (equal elco-output (format nil output)))
-              (format t "FAILED, expected output was ~s but got ~s~%" output elco-output)
-              t)))))
+(defun run-test (input output &key object-file)
+  (let ((elco-output (elco:execute-program input :driver-o object-file)))
+    (if (not (equal elco-output (format nil output)))
+        (format t "FAILED, expected output was ~s but got ~s~%" output elco-output)
+        t)))
 
-(defun run-tests (&key tests select)
+(defun run-rec-tests (&key tests select object-file)
   (if tests
       (if (stringp (car tests))
           (let ((break-loop nil))
@@ -49,7 +45,7 @@
             (loop for i in (cadr tests)
                until break-loop do
                (format t "test ~s : ~s ... " (car tests) i)
-               (if (run-test (car i) (caddr i))
+               (if (run-test (car i) (caddr i) :object-file object-file)
                    (format t "PASSED~%")
                    (setf break-loop T)))
             (if break-loop
@@ -60,12 +56,17 @@
           (loop for i in tests  
              until (if select 
                        (if (equal (car i) select)
-                           (not (run-tests :tests i))
+                           (not (run-rec-tests :tests i))
                            nil)
-                       (not (run-tests :tests i)))))
+                       (not (run-rec-tests :tests i)))))
       (if select
-          (run-tests :select select :tests *all-tests*)
-          (run-tests :tests *all-tests*))))
+          (run-rec-tests :select select :tests *all-tests*)
+          (run-rec-tests :tests *all-tests*))))
+
+(defun run-tests (&key select)
+  (let ((object-file (elco:create-driver-object)))
+    (run-rec-tests :select select :object-file object-file)
+    (sb-ext:run-program "/bin/rm" `("-f" ,(namestring object-file)))))
 
 (defmacro deftest ((test-id) &body body)
   `(setf *all-tests* 

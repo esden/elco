@@ -34,26 +34,22 @@
 
 (defvar *compile-directory* *default-pathname-defaults*)
 
-(defvar *compile-port* nil)
-
-(defun open-compile-port (file)
-  (setf *compile-port* (open file :direction :output :if-exists :supersede)))
-
-(defun close-compile-port ()
-  (close *compile-port*)
-  (setf *compile-port* nil))
-
 (defun emit (form &rest params)
-  (progn (apply #'format `(,*compile-port* ,form ,@params))
-          (format *compile-port* "~%")))
+  (with-output-to-string (emit-string)
+    (apply #'format emit-string form params)
+    (terpri emit-string)))
+
+(defmacro emitn (&body body)
+  `(concatenate 'string ,@body))
 
 ;%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 ; Header and footer emission.
 ;%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 (defun emit-function-header (name)
-  (emit ".globl ~a" name)
-  (emit "~a:" name))
+  (emitn
+    (emit ".globl ~a" name)
+    (emit "~a:" name)))
 
 (defun emit-function-footer ()
   (emit "    ret"))
@@ -135,7 +131,7 @@
   `(setf (gethash (symbol-name ',prim) *prim-symbol-list*) 
          (make-prim :is-prim t 
                     :arg-count ,(length args) 
-                    :emitter (lambda (,si ,env ,@args) ,@body))))
+                    :emitter (lambda (,si ,env ,@args) (emitn ,@body)))))
 
 (defun next-stack-index (si)
   (- si +wordsize+))
@@ -458,14 +454,15 @@
 (defun emit-if (si env expr)
   (let ((alt-label (unique-label))
         (end-label (unique-label)))
-    (emit-expr si env (if-test expr))
-    (emit "    cmp $~s, %al" +bool-f+)
-    (emit "    je ~a" alt-label)
-    (emit-expr si env (if-conseq expr))
-    (emit "    jmp ~a" end-label)
-    (emit "~a:" alt-label)
-    (emit-expr si env (if-altern expr))
-    (emit "~a:" end-label)))
+    (emitn
+      (emit-expr si env (if-test expr))
+      (emit "    cmp $~s, %al" +bool-f+)
+      (emit "    je ~a" alt-label)
+      (emit-expr si env (if-conseq expr))
+      (emit "    jmp ~a" end-label)
+      (emit "~a:" alt-label)
+      (emit-expr si env (if-altern expr))
+      (emit "~a:" end-label))))
 
 ;%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 ; Variables (let, let*)
@@ -503,12 +500,13 @@
   (labels ((process-let (bindings si new-env)
              (if bindings
                  (let ((b (car bindings)))
-                   (emit-expr si (if (let*p expr) new-env env) (cadr b))
-                   (emit-stack-save si)
-                   (process-let 
-                            (cdr bindings)
-                            (next-stack-index si)
-                            (extend-env (car b) si new-env)))
+                   (emitn
+                     (emit-expr si (if (let*p expr) new-env env) (cadr b))
+                     (emit-stack-save si)
+                     (process-let 
+                      (cdr bindings)
+                      (next-stack-index si)
+                      (extend-env (car b) si new-env))))
                  (emit-expr si new-env (let-body expr)))))
     (process-let (let-bindings expr) si env)))
 
@@ -545,16 +543,17 @@
   (cons 'elco:progn (cddr expr)))
 
 (defun emit-lambda (env)
-  (lambda (expr label) 
-    (emit-function-header label)
-    (labels ((emit-lambda-closure (fmls si env)
-               (if (not fmls) 
-                   (emit-tail-expr si env (lambda-body expr))
-                   (emit-lambda-closure (cdr fmls)
-                      (next-stack-index si)
-                      (extend-env (car fmls) si env)))))
-      (emit-lambda-closure (lambda-formals expr) (- +wordsize+) env))
-    (emit-function-footer)))
+  (lambda (expr label)
+    (emitn
+      (emit-function-header label)
+      (labels ((emit-lambda-closure (fmls si env)
+                 (if (not fmls)
+                     (emit-tail-expr si env (lambda-body expr))
+                     (emit-lambda-closure (cdr fmls)
+                                          (next-stack-index si)
+                                          (extend-env (car fmls) si env)))))
+        (emit-lambda-closure (lambda-formals expr) (- +wordsize+) env))
+      (emit-function-footer))))
 
 (defun emit-letrec (expr)
   (let* ((bindings (letrec-bindings expr))
@@ -562,8 +561,9 @@
          (lambdas (mapcar #'cadr bindings))
          (asm-labels (unique-labels lvars))
          (env (make-initial-env lvars asm-labels)))
-    (mapcan (emit-lambda env) lambdas asm-labels)
-    (emit-elco-entry env (letrec-body expr))))
+    (emitn
+      (apply #'concatenate (cons 'string (mapcar (emit-lambda env) lambdas asm-labels)))
+      (emit-elco-entry env (letrec-body expr)))))
 
 (defun call-target (expr)
   (if (equal (symbol-name (car expr)) "APP")
@@ -589,14 +589,15 @@
 (defun emit-app (si env expr)
   (labels ((emit-arguments (si args)
              (unless (not args)
-               (progn 
+               (emitn 
                  (emit-expr si env (car args))
-                 (emit-stack-save si))
-               (emit-arguments (next-stack-index si) (cdr args)))))
-    (emit-arguments (next-stack-index si) (call-args expr))
-    (emit-adjust-base (+ si +wordsize+))
-    (emit-call env (call-target expr))
-    (emit-adjust-base (- (+ si +wordsize+)))))
+                 (emit-stack-save si)
+                 (emit-arguments (next-stack-index si) (cdr args))))))
+    (emitn
+      (emit-arguments (next-stack-index si) (call-args expr))
+      (emit-adjust-base (+ si +wordsize+))
+      (emit-call env (call-target expr))
+      (emit-adjust-base (- (+ si +wordsize+))))))
 
 ;%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 ; Tail calls
@@ -620,25 +621,27 @@
 (defun emit-tail-if (si env expr)
   (let ((alt-label (unique-label))
         (end-label (unique-label)))
-    (emit-expr si env (if-test expr))
-    (emit "    cmp $~s, %al" +bool-f+)
-    (emit "    je ~a" alt-label)
-    (emit-tail-expr si env (if-conseq expr))
-    (emit "    jmp ~a" end-label)
-    (emit "~a:" alt-label)
-    (emit-tail-expr si env (if-altern expr))
-    (emit "~a:" end-label)))
+    (emitn
+      (emit-expr si env (if-test expr))
+      (emit "    cmp $~s, %al" +bool-f+)
+      (emit "    je ~a" alt-label)
+      (emit-tail-expr si env (if-conseq expr))
+      (emit "    jmp ~a" end-label)
+      (emit "~a:" alt-label)
+      (emit-tail-expr si env (if-altern expr))
+      (emit "~a:" end-label))))
 
 (defun emit-tail-let (si env expr)
   (labels ((process-let (bindings si new-env)
              (if bindings
                  (let ((b (car bindings)))
-                   (emit-expr si (if (let*p expr) new-env env) (cadr b))
-                   (emit-stack-save si)
-                   (process-let 
-                    (cdr bindings)
-                    (next-stack-index si)
-                    (extend-env (car b) si new-env)))
+                   (emitn
+                     (emit-expr si (if (let*p expr) new-env env) (cadr b))
+                     (emit-stack-save si)
+                     (process-let 
+                      (cdr bindings)
+                      (next-stack-index si)
+                      (extend-env (car b) si new-env))))
                  (emit-tail-expr si new-env (let-body expr)))))
     (process-let (let-bindings expr) si env)))
 
@@ -648,19 +651,20 @@
 (defun emit-tail-app (si env expr)
   (labels ((emit-arguments (si args)
              (unless (not args)
-               (progn 
+               (emitn 
                  (emit-expr si env (car args))
-                 (emit-stack-save si))
-               (emit-arguments (next-stack-index si) (cdr args))))
+                 (emit-stack-save si)
+                 (emit-arguments (next-stack-index si) (cdr args)))))
            (emit-move-args (pos si count)
              (unless (zerop count)
-               (progn
+               (emitn
                  (emit "    movl ~s(%esp), %eax" si)
                  (emit "    movl %eax, ~s(%esp)" pos)
                  (emit-move-args (next-stack-index pos) (next-stack-index si) (1- count))))))
-    (emit-arguments si (call-args expr))
-    (emit-move-args (- +wordsize+) si (length (call-args expr)))
-    (emit-tail-call env (call-target expr))))
+    (emitn
+      (emit-arguments si (call-args expr))
+      (emit-move-args (- +wordsize+) si (length (call-args expr)))
+      (emit-tail-call env (call-target expr)))))
 
 (defun emit-tail-progn (si env expr)
   (emit-progn si env expr))
@@ -694,7 +698,7 @@
 
       (if (= (length expr) 1)
           (emit-tail-expr si env (car expr))
-          (progn 
+          (emitn 
             (emit-expr si env (car expr))
             (emit-progn si env (cdr expr))))))
 
@@ -712,24 +716,26 @@
   (cadr expr))
 
 (defun emit-foreign-call (si env expr)
-  (emit "    movl %esp, %edi")
-  (emit "    addl $~s, %edi" (- si (* +wordsize+ (1- (length (cddr expr))))))
-  (emit "    andl $15, %edi")
-  (labels ((emit-params (si expr)
-             (if (not expr)
-                 si
-                 (progn
-                   (emit-expr si env (car expr))
-                   (emit "    subl %edi, %esp")
-                   (emit-stack-save si)
-                   (emit "    addl %edi, %esp")
-                   (emit-params (next-stack-index si) (cdr expr))))))
-    (let ((end-of-si (+ +wordsize+ (emit-params  si (reverse (cddr expr))))))
-      (emit "    subl %edi, %esp")
-      (emit-adjust-base end-of-si)
-      (emit "    call e_~a" (foreign-call-label expr))
-      (emit-adjust-base (- end-of-si))
-      (emit "    addl %edi, %esp"))))
+  (emitn
+    (emit "    movl %esp, %edi")
+    (emit "    addl $~s, %edi" (- si (* +wordsize+ (1- (length (cddr expr))))))
+    (emit "    andl $15, %edi")
+    (labels ((emit-params (si expr)
+               (if (not expr)
+                   si
+                   (emitn
+                     (emit-expr si env (car expr))
+                     (emit "    subl %edi, %esp")
+                     (emit-stack-save si)
+                     (emit "    addl %edi, %esp")
+                     (emit-params (next-stack-index si) (cdr expr))))))
+      (let ((end-of-si (+ +wordsize+ (emit-params  si (reverse (cddr expr))))))
+        (emitn
+          (emit "    subl %edi, %esp")
+          (emit-adjust-base end-of-si)
+          (emit "    call e_~a" (foreign-call-label expr))
+          (emit-adjust-base (- end-of-si))
+          (emit "    addl %edi, %esp"))))))
 
 ;%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 ; Highlevel emission
@@ -749,64 +755,72 @@
     (t (error "Supplied argument not an elco expression! ~a" expr))))
 
 (defun emit-elco-entry (env expr)
-  (emit-function-header "E_elco_entry")
-  (emit-expr (- +wordsize+) env expr)
-  (emit-function-footer))
+  (emitn
+    (emit-function-header "E_elco_entry")
+    (emit-expr (- +wordsize+) env expr)
+    (emit-function-footer)))
 
 (defun emit-program (expr)
-  (if (letrecp expr)
-      (emit-letrec expr)
-      (emit-elco-entry nil expr))
-  (emit-function-header "elco_entry")
-  (emit "    movl 4(%esp), %ecx  /* get context save pointer */")
-  (emit "    movl %ebx,  4(%ecx) /* save ebx */")
-  (emit "    movl %esi, 16(%ecx) /* save esi */")
-  (emit "    movl %edi, 20(%ecx) /* save edi */")
-  (emit "    movl %ebp, 24(%ecx) /* save ebp */")
-  (emit "    movl %esp, 28(%ecx) /* save esp */")
-  (emit "    movl %ecx, %esi")
-  (emit "    movl 12(%esp), %ebp /* get heap pointer */")
-  (emit "    movl 8(%esp), %esp  /* get stack pointer */")
-  (emit "    call E_elco_entry")
-  (emit "    movl %esi, %ecx")
-  (emit "    movl  4(%ecx), %ebx  /* restore ebx */")
-  (emit "    movl 16(%ecx), %esi  /* restore esi */")
-  (emit "    movl 20(%ecx), %edi  /* restore edi */")
-  (emit "    movl 24(%ecx), %ebp  /* restore ebp */")
-  (emit "    movl 28(%ecx), %esp  /* restore esp */")
-  (emit-function-footer))
+  (emitn
+    (if (letrecp expr)
+        (emit-letrec expr)
+        (emit-elco-entry nil expr))
+    (emit-function-header "elco_entry")
+    (emit "    movl 4(%esp), %ecx  /* get context save pointer */")
+    (emit "    movl %ebx,  4(%ecx) /* save ebx */")
+    (emit "    movl %esi, 16(%ecx) /* save esi */")
+    (emit "    movl %edi, 20(%ecx) /* save edi */")
+    (emit "    movl %ebp, 24(%ecx) /* save ebp */")
+    (emit "    movl %esp, 28(%ecx) /* save esp */")
+    (emit "    movl %ecx, %esi")
+    (emit "    movl 12(%esp), %ebp /* get heap pointer */")
+    (emit "    movl 8(%esp), %esp  /* get stack pointer */")
+    (emit "    call E_elco_entry")
+    (emit "    movl %esi, %ecx")
+    (emit "    movl  4(%ecx), %ebx  /* restore ebx */")
+    (emit "    movl 16(%ecx), %esi  /* restore esi */")
+    (emit "    movl 20(%ecx), %edi  /* restore edi */")
+    (emit "    movl 24(%ecx), %ebp  /* restore ebp */")
+    (emit "    movl 28(%ecx), %esp  /* restore esp */")
+    (emit-function-footer)))
 
 (defun compile-program (expr)
-  (open-compile-port (merge-pathnames *compile-directory* #P"elco.s"))
-  (emit-program expr)
-  (close-compile-port))
+  (emit-program expr))
 
 ;%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 ; Convinience code
 ;%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-(defun build ()
-  (with-output-to-string (gcc-output-stream)
-    (sb-ext:run-program "/usr/bin/gcc" 
-                        `("-O3"
-                          "-Wall"
-                          ,(namestring *driver-object*) 
-                          ,(namestring (merge-pathnames *compile-directory* #P"elco.s")) 
-                          "-o" ,(namestring (merge-pathnames *compile-directory* #P"elco.bin"))) 
-                        :output gcc-output-stream
-                        :error :output)))
+(defun build (code &key output driver-o)
+  (let ((assembler-file-name (make-temp-file-name "s"))
+        (binary-file-name (if output output (make-temp-file-name "bin")))
+        (driver-object (if driver-o driver-o (create-driver-object))))
+    (with-open-file (assembler-file assembler-file-name :direction :output :if-exists :supersede)
+      (princ code assembler-file))
+    (let ((gcc-output (with-output-to-string (gcc-output-stream)
+                        (sb-ext:run-program "/usr/bin/gcc" 
+                                            `("-O3"
+                                              "-Wall"
+                                              ,(namestring driver-object) 
+                                              ,(namestring assembler-file-name) 
+                                              "-o" ,(namestring binary-file-name)) 
+                                            :output gcc-output-stream
+                                            :error :output))))
+      (unless (string= "" gcc-output) (format t "gcc-error: ~s~%" gcc-output)))
+    (sb-ext:run-program "/bin/rm" `("-f" ,(namestring assembler-file-name)))
+    (unless driver-o (sb-ext:run-program "/bin/rm" `("-f" ,(namestring driver-object))))
+    binary-file-name))
 
-(defun execute ()
+(defun execute (binary)
   (with-output-to-string (elco-output-stream)
-    (sb-ext:run-program (namestring (merge-pathnames *compile-directory* #P"elco.bin"))
+    (sb-ext:run-program (namestring binary)
                         nil
                         :output elco-output-stream)))
 
-(defun execute-program (expr)
-  (compile-program expr)
-  (let ((gcc-output-string (build))
-        (elco-output-string (execute)))
-    (format t "gcc: ~a~%" gcc-output-string)
-    (format t "elco: ~a" elco-output-string)))
+(defun execute-program (expr &key driver-o)
+  (let* ((binary-file (build (compile-program expr) :driver-o driver-o))
+         (elco-output (execute binary-file)))
+    (sb-ext:run-program "/bin/rm" `("-f" ,(namestring binary-file)))
+    elco-output))
 
 
