@@ -168,7 +168,11 @@
 
 (defprim (elco:not arg)
   (emit-expr arg)
-  (emit "    xor $64, %al"))
+  (emit "    cmp $~s, %al" +bool-f+)
+  (emit "    sete %al")
+  (emit "    movzbl %al, %eax")
+  (emit "    sal $~s, %al" +bool-bit+)
+  (emit "    or $~s, %al" +bool-f+))
 
 ;%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 ; Primcall emission
