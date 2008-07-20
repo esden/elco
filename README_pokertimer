@@ -1,0 +1,15 @@
+To compile this Pokertimer you will need:
+* sbcl (to run the compiler)
+* gcc  (to compile the resulting binary)
+
+It was tested on:
+* Mac OS X Leopard Intel (works)
+* Debian Linux (32bit)   (works)
+* Ubuntu Linux (64bit)   (works)
+
+To compile and run Pokertimer simply execute:
+# ./run_pokertimer.sh
+
+If you have ideas or questions go to my page: http://www.esden.net
+
+Have fun! :)

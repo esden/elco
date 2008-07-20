@@ -1,0 +1,68 @@
+ELCO stands for Esdens Lisp COmpiler
+
+The project started while trying out the Steps provided in two papers 
+by Abdulaziz Ghuloum called "Compilers: Backend to Frontend and Back 
+to Front Again" and "An Incremental Approach to Compiler Construction"
+
+The tests are mostly translated from sheme examples provided on 
+Abdulazizs site http://www.cs.indiana.edu/~aghuloum. 
+
+Otherwise you can see in the tags directory of the svn tree all the 
+steps from "Compilers: Backend to Frontend"
+
+The syntax of the ELCO language is not stable and will probably change
+before I consider it stable. Furthermore see the trac page on 
+http://www.esden.net/trac/elco for all the TODO's there are. There is 
+a lot of them. ;)
+
+When you are using slime you should first change the working directory
+of slime repl to the directory of elco. To do this, go to the slime 
+repl and type ',' and then type 'cd' and provide the directory where 
+elco is located.
+
+Loading the compiler:
+
+(load "elco-package.lisp")
+(load "elco.lisp")
+
+Loading test system:
+
+(load "elco-test-package.lisp")
+(load "elco-test.lisp")
+
+Running all tests:
+
+(elco-test:run-tests)
+
+Running a specific testsuite:
+
+(elco-test:run-tests :select "test suite name")
+
+Compiling a program:
+
+(elco:compile-program '(elco:fx+ 1 2))
+
+[NOTE: this only generates the elco.s file in the current working 
+       directory of your lisp world]
+
+Compiling and executing a program:
+
+(elco:execute-program '(elco:fx+ 1 2))
+
+Building a program already compiled on the console:
+
+./build.sh
+
+[NOTE: this generates from the elco.s, elco-driver.c and 
+       elco-character-table.h the resulting elco binary]
+
+Running a compiled and built program in the console:
+
+./elco
+
+The syntax of the ELCO langage can be seen in elco-package.lisp 
+export section. Full documentation is pending. But currently because 
+the langauge is not stable enough, there is no sense in writing it.
+
+Cheers 
+    Piotr Esden-Tempski
