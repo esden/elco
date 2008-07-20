@@ -56,6 +56,12 @@
 (defconstant +bool-mask+ #x3F)
 (defconstant +bool-bit+ 6)
 
+(defconstant +cons-mask+ 7)
+(defconstant +cons-tag+ 1)
+
+(defconstant +string-mask+ 7)
+(defconstant +string-tag+ 2)
+
 (defun fixnump (x)
   (and (integerp x) (typep x 'fixnum) (<= +fxlower+ x +fxupper+)))
 
@@ -184,6 +190,46 @@
   (emit "    sal $~s, %al" +bool-bit+)
   (emit "    or $~s, %al" +bool-f+))
 
+(defprim (elco:consp si env arg)
+  (emit-expr si env arg)
+  (emit "    and $~s, %al" +cons-mask+)
+  (emit "    cmp $~s, %al" +cons-tag+)
+  (emit "    sete %al")
+  (emit "    movzbl %al, %eax")
+  (emit "    sal $~s, %al" +bool-bit+)
+  (emit "    or $~s, %al" +bool-f+))
+
+(defprim (elco:car si env arg)
+  (emit-expr si env arg)
+  (emit "    movl -1(%eax), %eax"))
+
+(defprim (elco:cdr si env arg)
+  (emit-expr si env arg)
+  (emit "    movl 3(%eax), %eax"))
+
+(defprim (elco:make-string si env arg)
+  (emit-expr si env arg)
+  (emit "    movl %eax, 0(%ebp)")
+  (emit "    movl %eax, %ebx")
+  (emit "    movl %ebp, %eax")
+  (emit "    orl $~s, %eax" +string-tag+)
+  (emit "    addl $11, %ebx")
+  (emit "    andl $-8, %ebx")
+  (emit "    addl %ebx, %ebp"))
+
+(defprim (elco:stringp si env arg)
+  (emit-expr si env arg)
+  (emit "    and $~s, %al" +string-mask+)
+  (emit "    cmp $~s, %al" +string-tag+)
+  (emit "    sete %al")
+  (emit "    movzbl %al, %eax")
+  (emit "    sal $~s, %al" +bool-bit+)
+  (emit "    or $~s, %al" +bool-f+))
+
+(defprim (elco:string-length si env arg)
+  (emit-expr si env arg)
+  (emit "    movl -2(%eax), %eax"))
+
 ;;; Binary primitives
 (defprim (elco:fx+ si env arg1 arg2)
   (emit-expr si env arg1)
@@ -265,6 +311,49 @@
   (emit "    movzbl %al, %eax")
   (emit "    sal $~s, %al" +bool-bit+)
   (emit "    or $~s, %al" +bool-f+))
+
+(defprim (elco:char= si env arg1 arg2)
+  (emit-expr si env arg1)
+  (emit "    movl %eax, ~s(%esp)" si)
+  (emit-expr (next-stack-index si) env arg2)
+  (emit "    cmpl ~s(%esp), %eax" si)
+  (emit "    sete %al")
+  (emit "    movzbl %al, %eax")
+  (emit "    sal $~s, %al" +bool-bit+)
+  (emit "    or $~s, %al" +bool-f+))
+
+(defprim (elco:cons si env arg1 arg2)
+  (emit-expr si env arg1)
+  (emit "    movl %eax, ~s(%esp)" si)
+  (emit-expr (next-stack-index si) env arg2)
+  (emit "    movl %eax, 4(%ebp)")
+  (emit "    movl ~s(%esp), %eax" si)
+  (emit "    movl %eax, 0(%ebp)")
+  (emit "    movl %ebp, %eax")
+  (emit "    orl $~s, %eax" +cons-tag+)
+  (emit "    addl $8, %ebp"))
+
+(defprim (elco:string-ref si env string index)
+  (emit-expr si env string)
+  (emit "    movl %eax, %ebx")
+  (emit-expr si env index)
+  (emit "    shrl $~s, %eax" +fxshift+)
+  (emit "    movzbl 2(%ebx, %eax), %eax")
+  (emit "    shll $~s, %eax" +charshift+)
+  (emit "    orl $~s, %eax" +chartag+))
+
+; Trinary functions
+(defprim (elco:string-set si env string index val)
+  (emit-expr si env string)
+  (emit "    movl %eax, %ebx     /* save string pointer */")
+  (emit "    movl %ebx, ~s(%esp) /* save string pointer to stack */" si)
+  (emit-expr (next-stack-index si) env index)
+  (emit "    shrl $~s, %eax      /* convert index from fx */" +fxshift+)
+  (emit "    addl %eax, %ebx     /* add index to string pointer */")
+  (emit-expr (next-stack-index si) env val)
+  (emit "    shrl $~s, %eax      /* convert from char */" +charshift+)
+  (emit "    movb %al, 2(%ebx)   /* store char */")
+  (emit "    movl ~s(%esp), %eax /* get string pointer */" si))
 
 ;%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 ; Primcall emission
@@ -360,7 +449,7 @@
   (cadr expr))
 
 (defun let-body (expr)
-  (caddr expr))
+  (cons 'elco:progn (cddr expr)))
 
 (defun emit-let (si env expr)
   (labels ((process-let (bindings si new-env)
@@ -391,7 +480,7 @@
   (cadr expr))
 
 (defun letrec-body (expr)
-  (caddr expr))
+  (cons 'elco:progn (cddr expr)))
 
 (defun unique-labels (lvars)
   (mapcar (lambda (l) (concatenate 'string "LF_" (symbol-name l))) lvars))
@@ -405,7 +494,7 @@
   (cadr expr))
 
 (defun lambda-body (expr)
-  (caddr expr))
+  (cons 'elco:progn (cddr expr)))
 
 (defun emit-lambda (env)
   (lambda (expr label) 
@@ -518,12 +607,15 @@
            (emit-move-args (pos si count)
              (unless (zerop count)
                (progn
-                 (emit "    movl ~s(%esp), %ebx" si)
-                 (emit "    movl %ebx, ~s(%esp)" pos)
+                 (emit "    movl ~s(%esp), %eax" si)
+                 (emit "    movl %eax, ~s(%esp)" pos)
                  (emit-move-args (next-stack-index pos) (next-stack-index si) (1- count))))))
     (emit-arguments si (call-args expr))
     (emit-move-args (- +wordsize+) si (length (call-args expr)))
     (emit-tail-call env (call-target expr))))
+
+(defun emit-tail-progn (si env expr)
+  (emit-progn si env expr))
 
 (defun emit-tail-expr (si env expr)
   (cond
@@ -533,7 +625,26 @@
     ((ifp expr) (emit-tail-if si env expr))
     ((letp expr) (emit-tail-let si env expr))
     ((primcallp expr) (emit-tail-primcall si env expr))
+    ((prognp expr) (emit-tail-progn si env expr))
     (t (error "Suppied tail argument not an elco expression! ~a" expr))))
+
+;%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+; progn
+;%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+(defun prognp (expr)
+  (and (listp expr)
+       (equal (symbol-name (car expr)) "PROGN")))
+
+(defun emit-progn (si env expr)
+  (if (and (symbolp (car expr)) (equal (symbol-name (car expr)) "PROGN"))
+      (emit-progn si env (cdr expr))
+
+      (if (= (length expr) 1)
+          (emit-tail-expr si env (car expr))
+          (progn 
+            (emit-expr si env (car expr))
+            (emit-progn si env (cdr expr))))))
 
 ;%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 ; Highlevel emission
@@ -548,10 +659,11 @@
     ((ifp expr) (emit-if si env expr))
     ((letp expr) (emit-let si env expr))
     ((primcallp expr) (emit-primcall si env expr))
+    ((prognp expr) (emit-progn si env expr))
     (t (error "Supplied argument not an elco expression! ~a" expr))))
 
 (defun emit-elco-entry (env expr)
-  (emit-function-header "L_elco_entry")
+  (emit-function-header "_L_elco_entry")
   (emit-expr (- +wordsize+) env expr)
   (emit-function-footer))
 
@@ -560,10 +672,20 @@
       (emit-letrec expr)
       (emit-elco-entry nil expr))
   (emit-function-header "_elco_entry")
-  (emit "    movl %esp, %ecx")
-  (emit "    movl 4(%esp), %esp")
-  (emit "    call L_elco_entry")
-  (emit "    movl %ecx, %esp")
+  (emit "    movl 4(%esp), %ecx  /* get context save pointer */")
+  (emit "    movl %ebx,  4(%ecx) /* save ebx */")
+  (emit "    movl %esi, 16(%ecx) /* save esi */")
+  (emit "    movl %edi, 20(%ecx) /* save edi */")
+  (emit "    movl %ebp, 24(%ecx) /* save ebp */")
+  (emit "    movl %esp, 28(%ecx) /* save esp */")
+  (emit "    movl 12(%esp), %ebp /* get heap pointer */")
+  (emit "    movl 8(%esp), %esp  /* get stack pointer */")
+  (emit "    call _L_elco_entry")
+  (emit "    movl  4(%ecx), %ebx  /* restore ebx */")
+  (emit "    movl 16(%ecx), %esi  /* restore esi */")
+  (emit "    movl 20(%ecx), %edi  /* restore edi */")
+  (emit "    movl 24(%ecx), %ebp  /* restore ebp */")
+  (emit "    movl 28(%ecx), %esp  /* restore esp */")
   (emit-function-footer))
 
 (defun compile-program (expr)
@@ -578,7 +700,8 @@
 (defun build ()
   (with-output-to-string (gcc-output-stream)
     (sb-ext:run-program "/usr/bin/gcc" 
-                 `("-Wall"
+                 `("-O3"
+                   "-Wall"
                    ,(namestring (merge-pathnames *compile-directory* #P"elco-driver.c")) 
                    ,(namestring (merge-pathnames *compile-directory* #P"elco.s")) 
                    "-o" ,(namestring (merge-pathnames *compile-directory* #P"elco"))) 

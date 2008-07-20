@@ -21,6 +21,14 @@
    :boolp
    :charp
    :not
+   :consp
+   :car
+   :cdr
+   :make-string
+   :stringp
+   :string-length
+   :string-ref
+   :string-set
    ; conditionals
    :if
    ; binary primitives
@@ -34,10 +42,14 @@
    :fx<=
    :fx>
    :fx>=
+   :char=
+   :cons
    ; let
    :let
    :let*
    ; functions
    :letrec
    :lambda
-   :app))
+   :app
+   ; progn
+   :progn))
