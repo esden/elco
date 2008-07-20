@@ -5,7 +5,7 @@
 	(with-open-file (driver-stream tmp :direction :output :if-exists :supersede)
 	 (princ "
 /*
- *  Copyright (c) 2008, Piotr Esden-Tempski
+ *  Copyright (c) 2008, Piotr Esden-Tempski <piotr at esden.net>
  *  All rights reserved.
  *  
  *  Redistribution and use in source and binary forms, with or without 
@@ -169,7 +169,7 @@ char *character_table[128] = {
 
 #endif /* ELCO_CHARACTER_TABLE_C */
 /*
- *  Copyright (c) 2008, Piotr Esden-Tempski
+ *  Copyright (c) 2008, Piotr Esden-Tempski <piotr at esden.net>
  *  All rights reserved.
  *  
  *  Redistribution and use in source and binary forms, with or without 
@@ -414,7 +414,5 @@ int main(int argc, char **argv){
 			 "-o"
 			 ,(namestring driver-object)))
    (sb-ext:run-program "/bin/rm" `("-f" ,(namestring tmp)))
-   (format t "Created driver object with name ~a~%" driver-object)
    driver-object))
-
 (defvar *driver-object* (create-driver-object))

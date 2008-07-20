@@ -9,7 +9,7 @@
   :description "Embedded Lisp COmpiler Testsystem"
   :author "Piotr Esden-Tempski <piotr at esden.net>"
   :version "0.0.0"
-  :license "BSD"
+  :license "BSD (see COPYING file)"
   :depends-on (:elco)
   :components 
   ((:module "test"

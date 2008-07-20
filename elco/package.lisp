@@ -1,4 +1,4 @@
-;;; Copyright (c) 2008, Piotr Esden-Tempski
+;;; Copyright (c) 2008, Piotr Esden-Tempski <piotr at esden.net>
 ;;; All rights reserved.
 ;;; 
 ;;; Redistribution and use in source and binary forms, with or without 

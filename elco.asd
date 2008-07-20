@@ -9,7 +9,7 @@
   :description "Embedded Lisp COmpiler | Esdens Lisp COmpiler"
   :author "Piotr Esden-Tempski <piotr at esden.net>"
   :version "0.0.0"
-  :license "BSD"
+  :license "BSD (see COPYING file)"
   :components 
   ((:module "elco"
             :components
