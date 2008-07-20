@@ -1,6 +1,8 @@
 /* a simple driver for elco_entry */
 #include <stdio.h>
 
+#include "elco-character-table.h"
+
 /* define all lisp constants */
 #define FXMASK 0x03
 #define FXSHIFT 2
@@ -12,14 +14,15 @@
 #define F 0x2F
 #define T 0x6F
 
-unsigned char elco_entry(void);
+unsigned int elco_entry(void);
 
 /* all lisp values are of type ptr */
 typedef unsigned int ptr_t;
 
 static void print_ptr(ptr_t x){
+    //printf("%08X", x);
     if((x & FXMASK) == FXTAG){
-        printf("%d", (int)(x >> FXSHIFT));
+        printf("%d", (int)((int)(x) >> FXSHIFT));
     }else if(x == NIL){
         printf("NIL");
     }else if(x == T){
@@ -27,7 +30,10 @@ static void print_ptr(ptr_t x){
     }else if(x == F){
         printf("F");
     }else if((x & CHARMASK) == CHARTAG){
-        printf("%c", (char)(x >> CHARSHIFT));
+        if((x >> CHARSHIFT) < 128)
+            printf("%s", character_table[x >> CHARSHIFT]);
+        else
+            printf("#\\%d", x >> CHARSHIFT);
     }else{
         printf("#<unknown 0x%08X>", x);
     }

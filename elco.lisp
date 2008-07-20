@@ -49,7 +49,7 @@
 (defconstant +nil+ #x3F)
 
 (defconstant +charshift+ 8)
-(defconstant +charmask+ #x0F)
+(defconstant +charmask+ #xFF)
 (defconstant +chartag+ #x0F)
 
 (defconstant +bool-f+ #x2F)
@@ -90,32 +90,40 @@
 ;; Primcall definitions
 ;;%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+(defvar *symbol-list* (make-hash-table))
+
 (defmacro defprim ((prim &rest args) &body body)
   `(progn 
-     (setf (get ',prim '*is-prim*) t)
-     (setf (get ',prim '*arg-count*) 
-           ,(length args))
-     (setf (get ',prim '*emitter*)
-           (lambda ,args ,@body))))
+     (format t "~s~%" (string ',prim))
+     (let ((prim-hash (make-hash-table)))
+       (setf (gethash '*is-prim* prim-hash) t)
+       (setf (gethash '*arg-count* prim-hash) 
+             ,(length args))
+       (setf (gethash '*emitter* prim-hash)
+             (lambda ,args ,@body))
+       ;(maphash #'(lambda (key value) (format t "prim-hash: ~s -> ~s~%" key value)) prim-hash)
+       ;(maphash #'(lambda (key value) (format t "symbol-list: ~s -> ~s~%" key value)) *symbol-list*)
+       ;(format t "symbol-list hash: ~s~%" (gethash (symbol-name ',prim) *symbol-list*))
+       (setf (gethash ',prim *symbol-list*) prim-hash))))
 
-(defprim (fx1+ arg)
-    (emit-expr arg)
-    (emit "    addl $~s, %eax" (immediate-rep 1)))
+(defprim (elco:fx1+ arg)
+  (emit-expr arg)
+  (emit "    addl $~s, %eax" (immediate-rep 1)))
 
-(defprim (fx1- arg)
-    (emit-expr arg)
-    (emit "    subl $~s, %eax" (immediate-rep 1)))
+(defprim (elco:fx1- arg)
+  (emit-expr arg)
+  (emit "    subl $~s, %eax" (immediate-rep 1)))
 
-(defprim (char-fx arg)
+(defprim (elco:char-fx arg)
   (emit-expr arg)
   (emit "    shrl $~s, %eax" (- +charshift+ +fxshift+)))
 
-(defprim (fx-char arg)
+(defprim (elco:fx-char arg)
   (emit-expr arg)
   (emit "    shll $~s, %eax" (- +charshift+ +fxshift+))
   (emit "    orl $~s, %eax" +chartag+))
 
-(defprim (fixnump arg)
+(defprim (elco:fixnump arg)
   (emit-expr arg)
   (emit "    and $~s, %al" +fxmask+)
   (emit "    cmp $~s, %al" +fxtag+)
@@ -124,7 +132,7 @@
   (emit "    sal $~s, %al" +bool-bit+)
   (emit "    or $~s, %al" +bool-f+))
 
-(defprim (fxzerop arg)
+(defprim (elco:fxzerop arg)
   (emit-expr arg)
   (emit "    cmp $0, %al")
   (emit "    sete %al")  
@@ -132,7 +140,7 @@
   (emit "    sal $~s, %al" +bool-bit+)
   (emit "    or $~s, %al" +bool-f+))
 
-(defprim (nilp arg)
+(defprim (elco:nilp arg)
   (emit-expr arg)
   (emit "    cmp $~s, %al" +nil+)
   (emit "    sete %al")  
@@ -140,7 +148,7 @@
   (emit "    sal $~s, %al" +bool-bit+)
   (emit "    or $~s, %al" +bool-f+))
 
-(defprim (boolp arg)
+(defprim (elco:boolp arg)
   (emit-expr arg)
   (emit "    and $~s, %al" +bool-mask+)
   (emit "    cmp $~s, %al" +bool-f+)
@@ -149,7 +157,7 @@
   (emit "    sal $~s, %al" +bool-bit+)
   (emit "    or $~s, %al" +bool-f+))
 
-(defprim (charp arg)
+(defprim (elco:charp arg)
   (emit-expr arg)
   (emit "    and $~s, %al" +charmask+)
   (emit "    cmp $~s, %al" +chartag+)
@@ -158,7 +166,7 @@
   (emit "    sal $~s, %al" +bool-bit+)
   (emit "    or $~s, %al" +bool-f+))
 
-(defprim (not arg)
+(defprim (elco:not arg)
   (emit-expr arg)
   (emit "    xor $64, %al"))
 
@@ -167,18 +175,21 @@
 ;%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 (defun primitivep (prim)
-  (and (symbolp prim) (get prim '*is-prim*)))
+  (and (symbolp prim) 
+       (gethash prim *symbol-list*) 
+       (gethash '*is-prim* (gethash prim *symbol-list*))))
 
 (defun primcallp (expr)
   (and (consp expr) (primitivep (car expr))))
 
 (defun primitive-emitter (prim)
-  (or (get prim '*emitter*)
+  (or (gethash '*emitter* (gethash  prim *symbol-list*))
       (error "The prim ~a has no emitter!" prim)))
 
 (defun check-primcall-args (prim args)
-  (or (= (get prim '*arg-count*) (length args)) 
-      (error "Wrong amount of parameters to primcall ~a, we expected ~a" prim (get prim '*arg-count*))))
+  (or (= (gethash '*arg-count* (gethash prim *symbol-list*)) (length args)) 
+      (error "Wrong amount of parameters to primcall ~a, we expected ~a" 
+             prim (gethash '*arg-count* (gethash prim *symbol-list*)))))
 
 (defun emit-primcall (expr)
   (let ((prim (car expr))
@@ -220,7 +231,7 @@
                  :output gcc-output-stream
                  :error :output)))
 
-(defun run ()
+(defun execute ()
   (with-output-to-string (elco-output-stream)
     (sb-ext:run-program (namestring (merge-pathnames *compile-directory* #P"elco"))
                  nil
@@ -229,6 +240,6 @@
 (defun execute-program (expr)
   (compile-program expr)
   (let ((gcc-output-string (build))
-        (elco-output-string (run)))
+        (elco-output-string (execute)))
     (format t "gcc: ~a~%" gcc-output-string)
     (format t "elco: ~a" elco-output-string)))

@@ -1,5 +1,6 @@
     .text
 .globl _elco_entry
 _elco_entry:
-    movl $92, %eax
+    movl $60, %eax
+    xor $64, %al
     ret
