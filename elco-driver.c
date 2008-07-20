@@ -9,6 +9,10 @@
 #define CHARMASK 0xFF
 #define CHARSHIFT 8
 #define CHARTAG 0x0F
+#define F 0x2F
+#define T 0x6F
+
+unsigned char elco_entry(void);
 
 /* all lisp values are of type ptr */
 typedef unsigned int ptr_t;
@@ -18,6 +22,10 @@ static void print_ptr(ptr_t x){
         printf("%d", (int)(x >> FXSHIFT));
     }else if(x == NIL){
         printf("NIL");
+    }else if(x == T){
+        printf("T");
+    }else if(x == F){
+        printf("F");
     }else if((x & CHARMASK) == CHARTAG){
         printf("%c", (char)(x >> CHARSHIFT));
     }else{
