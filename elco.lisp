@@ -2,6 +2,8 @@
 ; Basic Emission stuff
 ;%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+(in-package :elco)
+
 (defvar *compile-directory* *default-pathname-defaults*)
 
 (defvar *compile-port* nil)
@@ -210,7 +212,7 @@
 
 (defun build ()
   (with-output-to-string (gcc-output-stream)
-    (run-program "/usr/bin/gcc" 
+    (sb-ext:run-program "/usr/bin/gcc" 
                  `("-Wall"
                    ,(namestring (merge-pathnames *compile-directory* #P"elco-driver.c")) 
                    ,(namestring (merge-pathnames *compile-directory* #P"elco.s")) 
@@ -220,7 +222,7 @@
 
 (defun run ()
   (with-output-to-string (elco-output-stream)
-    (run-program (namestring (merge-pathnames *compile-directory* #P"elco"))
+    (sb-ext:run-program (namestring (merge-pathnames *compile-directory* #P"elco"))
                  nil
                  :output elco-output-stream)))
 
