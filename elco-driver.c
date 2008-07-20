@@ -41,9 +41,7 @@ typedef struct {
 /* all lisp values are of type ptr */
 typedef unsigned int ptr_t;
 
-unsigned int e_write(ptr_t fd, ptr_t string, ptr_t len);
-
-unsigned int elco_entry(context *ctxt, char *stack_base, char *heap_base);
+extern ptr_t elco_entry (context *ctxt, char *stack_base, char *heap_base) asm("elco_entry");
 
 /* stack handling functions */
 static char *allocate_protected_space(int size){
@@ -103,16 +101,19 @@ char* string_data(ptr_t str){
 }
 
 /* foreign function wrappers */
+extern ptr_t e_write(ptr_t fd, ptr_t str, ptr_t len) asm("e_write");
 ptr_t e_write(ptr_t fd, ptr_t str, ptr_t len){
     //printf("Writing to %i the string %s with length %i!\n", unshift(fd), string_data(str), unshift(len));
     return shift(write(unshift(fd), string_data(str), unshift(len)));
 }
 
+extern void e_exit (ptr_t val) asm("e_exit");
 void e_exit(ptr_t val){
     printf("An exit issued from elco, with return code %i!\n", unshift(val));
     exit(unshift(val));
 }
 
+extern ptr_t e_sleep (ptr_t seconds) asm("e_sleep");
 ptr_t e_sleep(ptr_t seconds){
     return shift(sleep(unshift(seconds)));
 }

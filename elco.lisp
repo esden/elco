@@ -1,3 +1,10 @@
+;;; (C) 2008 Piotr Esden-Tempski
+;;; Implementation of an elco in sbcl
+;;;
+;;; ELCO stands for Esden's Lisp COmpiler
+;;;
+;;; Have fun. ;)
+
 ;%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 ; Basic Emission stuff
 ;%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -704,7 +711,7 @@
     (let ((end-of-si (+ +wordsize+ (emit-params  si (reverse (cddr expr))))))
       (emit "    subl %edi, %esp")
       (emit-adjust-base end-of-si)
-      (emit "    call _e_~a" (foreign-call-label expr))
+      (emit "    call e_~a" (foreign-call-label expr))
       (emit-adjust-base (- end-of-si))
       (emit "    addl %edi, %esp"))))
 
@@ -726,7 +733,7 @@
     (t (error "Supplied argument not an elco expression! ~a" expr))))
 
 (defun emit-elco-entry (env expr)
-  (emit-function-header "_E_elco_entry")
+  (emit-function-header "E_elco_entry")
   (emit-expr (- +wordsize+) env expr)
   (emit-function-footer))
 
@@ -734,7 +741,7 @@
   (if (letrecp expr)
       (emit-letrec expr)
       (emit-elco-entry nil expr))
-  (emit-function-header "_elco_entry")
+  (emit-function-header "elco_entry")
   (emit "    movl 4(%esp), %ecx  /* get context save pointer */")
   (emit "    movl %ebx,  4(%ecx) /* save ebx */")
   (emit "    movl %esi, 16(%ecx) /* save esi */")
@@ -744,7 +751,7 @@
   (emit "    movl %ecx, %esi")
   (emit "    movl 12(%esp), %ebp /* get heap pointer */")
   (emit "    movl 8(%esp), %esp  /* get stack pointer */")
-  (emit "    call _E_elco_entry")
+  (emit "    call E_elco_entry")
   (emit "    movl %esi, %ecx")
   (emit "    movl  4(%ecx), %ebx  /* restore ebx */")
   (emit "    movl 16(%ecx), %esi  /* restore esi */")
