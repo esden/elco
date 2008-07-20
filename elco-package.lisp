@@ -35,6 +35,8 @@
    :fx+
    :fx-
    :fx*
+   :fx/
+   :fxmod
    :fxlogand
    :fxlogor
    :fx=
@@ -52,4 +54,6 @@
    :lambda
    :app
    ; progn
-   :progn))
+   :progn
+   ; foreign calls
+   :foreign-call))

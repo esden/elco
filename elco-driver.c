@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <sys/mman.h>
 #include <stdbool.h>
+#include <string.h>
 
 #include "elco-character-table.h"
 
@@ -37,10 +38,12 @@ typedef struct {
     void *esp; /* 28  preserve */
 } context;
 
-unsigned int elco_entry(context *ctxt, char *stack_base, char *heap_base);
-
 /* all lisp values are of type ptr */
 typedef unsigned int ptr_t;
+
+unsigned int e_write(ptr_t fd, ptr_t string, ptr_t len);
+
+unsigned int elco_entry(context *ctxt, char *stack_base, char *heap_base);
 
 /* stack handling functions */
 static char *allocate_protected_space(int size){
@@ -84,6 +87,34 @@ static void deallocate_protected_space(char *p, int size){
         printf("Could not free allocated protected space!\n");
         exit(1);
     }
+}
+
+/* foreign function helpers */
+int unshift(ptr_t val){
+    return val >> FXSHIFT;
+}
+
+ptr_t shift(int val){
+    return val << FXSHIFT;
+}
+
+char* string_data(ptr_t str){
+    return (char *)(str + 2);
+}
+
+/* foreign function wrappers */
+ptr_t e_write(ptr_t fd, ptr_t str, ptr_t len){
+    //printf("Writing to %i the string %s with length %i!\n", unshift(fd), string_data(str), unshift(len));
+    return shift(write(unshift(fd), string_data(str), unshift(len)));
+}
+
+void e_exit(ptr_t val){
+    printf("An exit issued from elco, with return code %i!\n", unshift(val));
+    exit(unshift(val));
+}
+
+ptr_t e_sleep(ptr_t seconds){
+    return shift(sleep(unshift(seconds)));
 }
 
 /* print immediate value */

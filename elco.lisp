@@ -250,6 +250,31 @@
   (emit-expr (next-stack-index si) env arg2)
   (emit "    imull ~s(%esp), %eax" si))
 
+;;; I do not fully understand this one ...
+(defprim (elco:fx/ si env arg1 arg2)
+  (emit-expr si env arg2)
+  (emit "    shrl $~s, %eax" +fxshift+)
+  (emit "    movl %eax, ~s(%esp)" si)
+  (emit-expr (next-stack-index si) env arg1)
+  (emit "    shrl $~s, %eax" +fxshift+)
+  (emit "    movl %eax, %edx")
+  (emit "    sarl $31, %edx")
+  (emit "    idivl ~s(%esp)" si)
+  (emit "    shll $~s, %eax" +fxshift+))
+
+;;; This one is also a bit magical ...
+(defprim (elco:fxmod si env arg1 arg2)
+  (emit-expr si env arg2)
+  (emit "    shrl $~s, %eax" +fxshift+)
+  (emit "    movl %eax, ~s(%esp)" si)
+  (emit-expr (next-stack-index si) env arg1)
+  (emit "    shrl $~s, %eax" +fxshift+)
+  (emit "    movl %eax, %edx")
+  (emit "    sarl $31, %edx")
+  (emit "    idivl ~s(%esp)" si)
+  (emit "    movl %edx, %eax")
+  (emit "    shll $~s, %eax" +fxshift+))
+
 (defprim (elco:fxlogand si env arg1 arg2)
   (emit-expr si env arg1)
   (emit "    movl %eax, ~s(%esp)" si)
@@ -483,7 +508,7 @@
   (cons 'elco:progn (cddr expr)))
 
 (defun unique-labels (lvars)
-  (mapcar (lambda (l) (concatenate 'string "LF_" (symbol-name l))) lvars))
+  (mapcar (lambda (l) (concatenate 'string "EF_" (symbol-name l))) lvars))
 
 (defun make-initial-env (lvars asm-labels &optional env)
   (if (and lvars asm-labels)
@@ -617,6 +642,9 @@
 (defun emit-tail-progn (si env expr)
   (emit-progn si env expr))
 
+(defun emit-tail-foreign-call (si env expr)
+  (emit-foreign-call si env expr))
+
 (defun emit-tail-expr (si env expr)
   (cond
     ((immediatep expr) (emit-tail-immediate expr))
@@ -625,6 +653,7 @@
     ((ifp expr) (emit-tail-if si env expr))
     ((letp expr) (emit-tail-let si env expr))
     ((primcallp expr) (emit-tail-primcall si env expr))
+    ((foreign-call-p expr) (emit-tail-foreign-call si env expr))
     ((prognp expr) (emit-tail-progn si env expr))
     (t (error "Suppied tail argument not an elco expression! ~a" expr))))
 
@@ -647,6 +676,39 @@
             (emit-progn si env (cdr expr))))))
 
 ;%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+; Foreign calls
+;%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+(defun foreign-call-p (expr)
+  (and (listp expr)
+       (>= (length expr) 2)
+       (equal (symbol-name (car expr)) "FOREIGN-CALL")
+       (stringp (cadr expr))))
+
+(defun foreign-call-label (expr)
+  (cadr expr))
+
+(defun emit-foreign-call (si env expr)
+  (emit "    movl %esp, %edi")
+  (emit "    addl $~s, %edi" (- si (* +wordsize+ (1- (length (cddr expr))))))
+  (emit "    andl $15, %edi")
+  (labels ((emit-params (si expr)
+             (if (not expr)
+                 si
+                 (progn
+                   (emit-expr si env (car expr))
+                   (emit "    subl %edi, %esp")
+                   (emit-stack-save si)
+                   (emit "    addl %edi, %esp")
+                   (emit-params (next-stack-index si) (cdr expr))))))
+    (let ((end-of-si (+ +wordsize+ (emit-params  si (reverse (cddr expr))))))
+      (emit "    subl %edi, %esp")
+      (emit-adjust-base end-of-si)
+      (emit "    call _e_~a" (foreign-call-label expr))
+      (emit-adjust-base (- end-of-si))
+      (emit "    addl %edi, %esp"))))
+
+;%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 ; Highlevel emission
 ;%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -659,11 +721,12 @@
     ((ifp expr) (emit-if si env expr))
     ((letp expr) (emit-let si env expr))
     ((primcallp expr) (emit-primcall si env expr))
+    ((foreign-call-p expr) (emit-foreign-call si env expr))
     ((prognp expr) (emit-progn si env expr))
     (t (error "Supplied argument not an elco expression! ~a" expr))))
 
 (defun emit-elco-entry (env expr)
-  (emit-function-header "_L_elco_entry")
+  (emit-function-header "_E_elco_entry")
   (emit-expr (- +wordsize+) env expr)
   (emit-function-footer))
 
@@ -678,9 +741,11 @@
   (emit "    movl %edi, 20(%ecx) /* save edi */")
   (emit "    movl %ebp, 24(%ecx) /* save ebp */")
   (emit "    movl %esp, 28(%ecx) /* save esp */")
+  (emit "    movl %ecx, %esi")
   (emit "    movl 12(%esp), %ebp /* get heap pointer */")
   (emit "    movl 8(%esp), %esp  /* get stack pointer */")
-  (emit "    call _L_elco_entry")
+  (emit "    call _E_elco_entry")
+  (emit "    movl %esi, %ecx")
   (emit "    movl  4(%ecx), %ebx  /* restore ebx */")
   (emit "    movl 16(%ecx), %esi  /* restore esi */")
   (emit "    movl 20(%ecx), %edi  /* restore edi */")
@@ -702,7 +767,7 @@
     (sb-ext:run-program "/usr/bin/gcc" 
                  `("-O3"
                    "-Wall"
-                   ,(namestring (merge-pathnames *compile-directory* #P"elco-driver.c")) 
+                   ,(namestring (merge-pathnames *compile-directory* #P"elco-driver.o")) 
                    ,(namestring (merge-pathnames *compile-directory* #P"elco.s")) 
                    "-o" ,(namestring (merge-pathnames *compile-directory* #P"elco"))) 
                  :output gcc-output-stream
