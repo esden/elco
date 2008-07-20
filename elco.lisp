@@ -24,9 +24,8 @@
 ;%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 (defun emit-function-header (name)
-  (emit "    .text")
-  (emit ".globl _~a" name)
-  (emit "_~a:" name))
+  (emit ".globl ~a" name)
+  (emit "~a:" name))
 
 (defun emit-function-footer ()
   (emit "    ret"))
@@ -107,6 +106,9 @@
        ;(format t "symbol-list hash: ~s~%" (gethash (symbol-name ',prim) *symbol-list*))
        (setf (gethash ',prim *symbol-list*) prim-hash))))
 
+(defun next-stack-index (si)
+  (- si +wordsize+))
+
 ;;; Unary primitives
 (defprim (elco:fx1+ si env arg)
   (emit-expr si env arg)
@@ -136,7 +138,7 @@
 
 (defprim (elco:fxzerop si env arg)
   (emit-expr si env arg)
-  (emit "    cmp $0, %al")
+  (emit "    cmpl $0, %eax")
   (emit "    sete %al")  
   (emit "    movzbl %al, %eax")
   (emit "    sal $~s, %al" +bool-bit+)
@@ -186,39 +188,39 @@
 (defprim (elco:fx+ si env arg1 arg2)
   (emit-expr si env arg1)
   (emit "    movl %eax, ~s(%esp)" si)
-  (emit-expr (- si +wordsize+) env arg2)
+  (emit-expr (next-stack-index si) env arg2)
   (emit "    addl ~s(%esp), %eax" si))
 
 (defprim (elco:fx- si env arg1 arg2)
   (emit-expr si env arg2)
   (emit "    movl %eax, ~s(%esp)" si)
-  (emit-expr (- si +wordsize+) env arg1)
+  (emit-expr (next-stack-index si) env arg1)
   (emit "    subl ~s(%esp), %eax" si))
 
 (defprim (elco:fx* si env arg1 arg2)
   (emit-expr si env arg1)
   (emit "    shrl $~s, %eax" +fxshift+)
   (emit "    movl %eax, ~s(%esp)" si)
-  (emit-expr (- si +wordsize+) env arg2)
+  (emit-expr (next-stack-index si) env arg2)
   (emit "    imull ~s(%esp), %eax" si))
 
 (defprim (elco:fxlogand si env arg1 arg2)
   (emit-expr si env arg1)
   (emit "    movl %eax, ~s(%esp)" si)
-  (emit-expr (- si +wordsize+) env arg2)
+  (emit-expr (next-stack-index si) env arg2)
   (emit "    andl ~s(%esp), %eax" si))
 
 (defprim (elco:fxlogor si env arg1 arg2)
   (emit-expr si env arg1)
   (emit "    movl %eax, ~s(%esp)" si)
-  (emit-expr (- si +wordsize+) env arg2)
+  (emit-expr (next-stack-index si) env arg2)
   (emit "    orl ~s(%esp), %eax" si))
 
 (defprim (elco:fx= si env arg1 arg2)
   (emit-expr si env arg1)
   (emit "    movl %eax, ~s(%esp)" si)
-  (emit-expr (- si +wordsize+) env arg2)
-  (emit "    cmp ~s(%esp), %eax" si)
+  (emit-expr (next-stack-index si) env arg2)
+  (emit "    cmpl ~s(%esp), %eax" si)
   (emit "    sete %al")
   (emit "    movzbl %al, %eax")
   (emit "    sal $~s, %al" +bool-bit+)
@@ -227,8 +229,8 @@
 (defprim (elco:fx< si env arg1 arg2)
   (emit-expr si env arg1)
   (emit "    movl %eax, ~s(%esp)" si)
-  (emit-expr (- si +wordsize+) env arg2)
-  (emit "    cmp ~s(%esp), %eax" si)
+  (emit-expr (next-stack-index si) env arg2)
+  (emit "    cmpl ~s(%esp), %eax" si)
   (emit "    setg %al")
   (emit "    movzbl %al, %eax")
   (emit "    sal $~s, %al" +bool-bit+)
@@ -237,8 +239,8 @@
 (defprim (elco:fx<= si env arg1 arg2)
   (emit-expr si env arg1)
   (emit "    movl %eax, ~s(%esp)" si)
-  (emit-expr (- si +wordsize+) env arg2)
-  (emit "    cmp ~s(%esp), %eax" si)
+  (emit-expr (next-stack-index si) env arg2)
+  (emit "    cmpl ~s(%esp), %eax" si)
   (emit "    setge %al")
   (emit "    movzbl %al, %eax")
   (emit "    sal $~s, %al" +bool-bit+)
@@ -247,8 +249,8 @@
 (defprim (elco:fx> si env arg1 arg2)
   (emit-expr si env arg1)
   (emit "    movl %eax, ~s(%esp)" si)
-  (emit-expr (- si +wordsize+) env arg2)
-  (emit "    cmp ~s(%esp), %eax" si)
+  (emit-expr (next-stack-index si) env arg2)
+  (emit "    cmpl ~s(%esp), %eax" si)
   (emit "    setl %al")
   (emit "    movzbl %al, %eax")
   (emit "    sal $~s, %al" +bool-bit+)
@@ -257,8 +259,8 @@
 (defprim (elco:fx>= si env arg1 arg2)
   (emit-expr si env arg1)
   (emit "    movl %eax, ~s(%esp)" si)
-  (emit-expr (- si +wordsize+) env arg2)
-  (emit "    cmp ~s(%esp), %eax" si)
+  (emit-expr (next-stack-index si) env arg2)
+  (emit "    cmpl ~s(%esp), %eax" si)
   (emit "    setle %al")
   (emit "    movzbl %al, %eax")
   (emit "    sal $~s, %al" +bool-bit+)
@@ -329,7 +331,7 @@
     (emit "~a:" end-label)))
 
 ;%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-; Variables (let)
+; Variables (let, let*)
 ;%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 (defun varp (env expr)
@@ -338,14 +340,15 @@
            t
            (error "Variable ~s is not bound!" expr))))
 
+(defun let*p (expr)
+  (equal (symbol-name (car expr)) "LET*"))
+
 (defun letp (expr)
-  (equal (symbol-name (car expr)) "LET"))
+  (or (equal (symbol-name (car expr)) "LET")
+      (let*p expr)))
 
 (defun emit-stack-save (si)
   (emit "    movl %eax, ~s(%esp)" si))
-
-(defun next-stack-index (si)
-  (- si +wordsize+))
 
 (defun extend-env (var si env)
   (if (and (symbolp var)
@@ -359,45 +362,133 @@
 (defun let-body (expr)
   (caddr expr))
 
-(defun process-let (bindings si env new-env body)
-  (if bindings
-      (let ((b (car bindings)))
-        (emit-expr si env (cadr b))
-        (emit-stack-save si)
-        (process-let (cdr bindings)
-                     (next-stack-index si)
-                     env
-                     (extend-env (car b) si new-env) body))
-      (emit-expr si new-env body)))
-
 (defun emit-let (si env expr)
-  (process-let (let-bindings expr) si env env (let-body expr)))
+  (labels ((process-let (bindings si new-env)
+             (if bindings
+                 (let ((b (car bindings)))
+                   (emit-expr si (if (let*p expr) new-env env) (cadr b))
+                   (emit-stack-save si)
+                   (process-let 
+                            (cdr bindings)
+                            (next-stack-index si)
+                            (extend-env (car b) si new-env)))
+                 (emit-expr si new-env (let-body expr)))))
+    (process-let (let-bindings expr) si env)))
 
 (defun emit-var (env expr)
-  (emit "    movl ~s(%esp), %eax" (cdr (assoc expr env))))
+  (emit "    movl ~s(%esp), %eax /* load ~a */" (cdr (assoc expr env)) expr))
+
+;%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+; Functions (letrec, lambda, app)
+;%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+(defun letrecp (expr)
+  (and (listp expr) 
+       (symbolp (car expr))
+       (equal (symbol-name (car expr)) "LETREC")))
+
+(defun letrec-bindings (expr)
+  (cadr expr))
+
+(defun letrec-body (expr)
+  (caddr expr))
+
+(defun unique-labels (lvars)
+  (mapcar (lambda (l) (concatenate 'string "LF_" (symbol-name l))) lvars))
+
+(defun make-initial-env (lvars asm-labels &optional env)
+  (if (and lvars asm-labels)
+      (make-initial-env (cdr lvars) (cdr asm-labels) (extend-env (car lvars) (car asm-labels) env))
+      env))
+
+(defun lambda-formals (expr)
+  (cadr expr))
+
+(defun lambda-body (expr)
+  (caddr expr))
+
+(defun emit-lambda (env)
+  (lambda (expr label) 
+    (emit-function-header label)
+    (labels ((emit-lambda-closure (fmls si env)
+               (if (not fmls) 
+                   (emit-expr si env (lambda-body expr))
+                   (emit-lambda-closure (cdr fmls)
+                      (next-stack-index si)
+                      (extend-env (car fmls) si env)))))
+      (emit-lambda-closure (lambda-formals expr) (- +wordsize+) env))
+    (emit-function-footer)))
+
+(defun emit-letrec (expr)
+  (let* ((bindings (letrec-bindings expr))
+         (lvars (mapcar #'car bindings))
+         (lambdas (mapcar #'cadr bindings))
+         (asm-labels (unique-labels lvars))
+         (env (make-initial-env lvars asm-labels)))
+    (mapcan (emit-lambda env) lambdas asm-labels)
+    (emit-elco-entry env (letrec-body expr))))
+
+(defun call-target (expr)
+  (if (equal (symbol-name (car expr)) "APP")
+      (cadr expr)
+      (car expr)))
+
+(defun call-args (expr)
+  (if (equal (symbol-name (car expr)) "APP")
+      (cddr expr)
+      (cdr expr)))
+
+(defun appp (env expr)
+  (and (listp expr)
+       (or (equal (symbol-name (car expr)) "APP")
+           (stringp (cdr (assoc (car expr) env))))))
+
+(defun emit-adjust-base (adjust)
+  (emit "    addl $~s, %esp" adjust))
+
+(defun emit-call (env expr)
+  (emit "    call ~a" (cdr (assoc expr env))))
+
+(defun emit-app (si env expr)
+  (labels ((emit-arguments (si args)
+             (unless (not args)
+               (progn 
+                 (emit-expr si env (car args))
+                 (emit-stack-save si))
+               (emit-arguments (next-stack-index si) (cdr args)))))
+    (emit-arguments (next-stack-index si) (call-args expr))
+    (emit-adjust-base (+ si +wordsize+))
+    (emit-call env (call-target expr))
+    (emit-adjust-base (- (+ si +wordsize+)))))
 
 ;%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 ; Highlevel emission
 ;%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 (defun emit-expr (si env expr)
-  ;(format t "emitting ~a~%" expr)
+  ;(format t "emitting ~a with env ~a~%" expr env)
   (cond
     ((immediatep expr) (emit-immediate expr))
+    ((appp env expr) (emit-app si env expr))
     ((varp env expr) (emit-var env expr))
     ((ifp expr) (emit-if si env expr))
     ((letp expr) (emit-let si env expr))
     ((primcallp expr) (emit-primcall si env expr))
     (t (error "Supplied argument not immediate, var, conditional, let nor primcall! ~a" expr))))
 
-(defun emit-program (expr)
+(defun emit-elco-entry (env expr)
   (emit-function-header "L_elco_entry")
-  (emit-expr (- +wordsize+) nil expr)
-  (emit-function-footer)
-  (emit-function-header "elco_entry")
+  (emit-expr (- +wordsize+) env expr)
+  (emit-function-footer))
+
+(defun emit-program (expr)
+  (if (letrecp expr)
+      (emit-letrec expr)
+      (emit-elco-entry nil expr))
+  (emit-function-header "_elco_entry")
   (emit "    movl %esp, %ecx")
   (emit "    movl 4(%esp), %esp")
-  (emit "    call _L_elco_entry")
+  (emit "    call L_elco_entry")
   (emit "    movl %ecx, %esp")
   (emit-function-footer))
 

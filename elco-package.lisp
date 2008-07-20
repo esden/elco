@@ -35,4 +35,9 @@
    :fx>
    :fx>=
    ; let
-   :let))
+   :let
+   :let*
+   ; functions
+   :letrec
+   :lambda
+   :app))
