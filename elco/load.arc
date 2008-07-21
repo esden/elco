@@ -26,6 +26,5 @@
 ;;; NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS 
 ;;; SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-(load "../elco/load.arc")
-(load "../test/tests.arc")
-(run-tests)
+(load "../elco/driver.arc")
+(load "../elco/elco.arc")

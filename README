@@ -43,11 +43,21 @@ to bootstrap the elco compiler)
 Running the Compiler:
 =====================
 
-Currently it is pretty dificult to run the compiler.
+To run a simple program like 42 you run:
 
-Load all the arc files from elco directory. Then you can run the 
-(execute-program) function. Some more convinient script will be added 
-in the future.
+>$ ./utils/execute.sh "42"
+
+You will get the following output:
+
+---
+Use (quit) to quit, (tl) to return here after an interrupt.
+arc> "loading elco"
+arc> nil
+arc> "executing program"
+arc> "42\n"
+---
+
+The last line contains the string that is the output of your program.
 
 Running Tests:
 ==============
